@@ -1,0 +1,5 @@
+
+		@prefix pcdm: <http://pcdm.org/models#>
+		 
+		<> a pcdm:Object .
+	
