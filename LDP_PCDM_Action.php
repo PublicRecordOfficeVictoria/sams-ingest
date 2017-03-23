@@ -1,6 +1,18 @@
 <?php
 
 include 'config.php';
+include 'pcdm_generator.php';
+
+//Curl object for testing url existences
+$chTest = getTestCurlInstance();
+
+if(isset($argv[1])) {
+	if($argv[1] == 'prune') {
+		prune();
+		echo 'All data is deleted' . "\n";
+		return;
+	}
+}
 
 $csvFile = fopen($csvFileName, 'r');
 $hasSkippedFirstRow = false;
@@ -8,11 +20,11 @@ $hasSkippedFirstRow = false;
 //Curl object for creating models
 $ch = getMainCurlInstance();
 
-//Curl object for testing url existences
-$chTest = getTestCurlInstance();
+//Pcdm object generator 
+$pcdm = new pcdm_generator();
 
 //Create root container
-createRootBasicContainer();
+createBasicContainer($serverUrl . $rootUrl);
 
 //LOOP FROM ROW TO ROW 
 while(! feof($csvFile)){
@@ -20,6 +32,7 @@ while(! feof($csvFile)){
   //Skip the first row for column names	
   if(!$hasSkippedFirstRow && $skipFirstRow){
   	$hasSkippedFirstRow = true;
+  	fgetcsv($csvFile, 1000);
   	continue;
   }	
   insertIntoRepo(fgetcsv($csvFile));
@@ -34,55 +47,98 @@ fclose($csvFile);
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-function createRootBasicContainer() {
-	global $ch, $serverUrl, $rootUrl;
-	$url = $serverUrl . $rootUrl;
+function createBasicContainer($url) {  
 	if(testUrlExistence($url) != 200) {
-		$ttlFile = prepareRootPcdmObject(); 
+		$ttlFile = prepareRdfObject('basic'); 
 		setRequestUrlAndFile($url, $ttlFile);
 		$responseHttpcode = sendRequest();
-		echo $responseHttpcode;
 		if($responseHttpcode == 201){
-			echo str_replace('/','', $rootUrl) . ' basic container is successfully created' . "\n";
-			return true;
+			echo $url . ' is successfully created' . "\n";
+			return 1;
 		}else{
-			echo str_replace('/','', $rootUrl) . ' basic container is failed to create' . "\n";
-			return false;
+			echo $url . ' is failed to create' . "\n";
+			return 0;
 		}
 	} else {
-		echo str_replace('/','', $rootUrl) . ' basic container is already exist' . "\n";
-		return true;
+		//echo $name . ' basic container is already exist' . "\n";
+		return -1;
 	}
 }
 
-//Frist layer of heirachical url e.g. /objects/#barcode
-function createFirstLayerBasicContainer($firstLayer) {
-	global $ch, $serverUrl, $rootUrl;
-	$url = $serverUrl . $rootUrl;
-	if(testUrlExistence($url) != 200){
-
+function createDirectContainer($url, $type){
+	if(testUrlExistence($url) != 200) {
+		$ttlFile = prepareRdfObject($type, $url); 
+		setRequestUrlAndFile($url, $ttlFile);
+		$responseHttpcode = sendRequest();
+		if($responseHttpcode == 201){
+			echo $url . ' is successfully created' . "\n";
+			return 1;
+		}else{
+			echo $url . ' is failed to create' . "\n";
+			return 0;
+		}
+	} else {
+		//echo $name . ' direct container is already exist' . "\n";
+		return -1;
 	}
 }
 
+function createFile($url, $name, $mimeType) {
+	if(testUrlExistence($url) != 200) {
+		$file = prepareFile($name); 
+		setRequestUrlAndFile($url, $file, $mimeType);
+		$responseHttpcode = sendRequest();
+		if($responseHttpcode == 201){
+			echo $url . ' is successfully created' . "\n";
+			return 1;
+		}else{
+			echo $url . ' is failed to create' . "\n";
+			return 0;
+		}
+	} else {
+		//echo $name . ' file is already exist' . "\n";
+		return -1;
+	}
+}
 
 function insertIntoRepo($row) { 
+	global $serverUrl, $rootUrl, $firstPrefix, $firstPrefixValue, $secondPrefix;
 	$fileName = $row[0];
 	$barcode = $row[1];
 	$imageOrder = $row[2];
 	$type = $row[3];
 
-	// $url = getUrl();
-	// $contentType = getContentType();
-	// $method = getMethod();
-	// $pcdmObject = getPcdmObject();
+	//Create FirstlayerBasicContainer
+	$url = $serverUrl . $rootUrl . '/' . $barcode; //e.g.  /records/100
+	createBasicContainer($url);
 
-	// curl_setopt($ch, CURLOPT_URL,            "http://url/url/url" );
-	// curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1 );
-	// curl_setopt($ch, CURLOPT_POST,           1 );
-	// curl_setopt($ch, CURLOPT_POSTFIELDS,     "body goes here" ); 
-	// curl_setopt($ch, CURLOPT_HTTPHEADER,     array('Content-Type: text/plain')); 
+	//Create SecondLayerDirectorContainer
+	$url .= $firstPrefix;  //e.g.  /records/100/images 
+	createDirectContainer($url, 'direct');
 
-	// $result=curl_exec ($ch);
+	//Create SecondLayerBasicContainer 
+	//e.g.  /records/100/images/image{{image_order}} or /records/100/images/image1*
+	if($imageOrder != ''){
+		$suburl = $firstPrefixValue . $imageOrder;  
+		createBasicContainer($url . $suburl);
+	}else{
+		$count = 0;
+		$suburl = NULL;
+		do {
+			$count += 1;
+			$suburl = $firstPrefixValue . $count;
+			$result = createBasicContainer($url . $suburl);
+		}while($result == -1); //If the name is taken count plue one
+	}
+
+	//Create SecondLayerDirectContainer
+	$url .= $suburl . $secondPrefix; //e.g.  /records/100/images/image1/files
+	createDirectContainer($url, 'direct_file');
+
+	//Upload the actual file 
+	$url .= '/' . $fileName; //e.g.  /records/100/images/image1/files/9210288-21398102-3112.jpg
+	createFile($url, $fileName, $type);
+
 }
 
 function getMainCurlInstance() {
@@ -107,22 +163,37 @@ function testUrlExistence($url) {
 	return $httpcode;
 }
 
-function prepareRootPcdmObject() {
+function prepareFile($name){
+	global $pathToFiles;
+	$pathToFile = $pathToFiles . '/' . $name;
+	$file = fopen($pathToFile,'r'); 
+	return  $file;
+}
+
+function prepareRdfObject($type, $url = null) {
+	global $pcdm;
 	$temp = 'temp.ttl';
-	$content = "
-		@prefix pcdm: <http://pcdm.org/models#>
-		 
-		<> a pcdm:Object .
-	";
+	switch ($type) {
+	    case 'basic':
+	        $content = $pcdm->pcdmObject();
+	        break;
+	    case 'direct':
+	        $content = $pcdm->ldpDirect($url);
+	        break;
+	    case 'direct_file':
+	        $content = $pcdm->ldpDirectFile($url);
+	        break;    
+	}
 	file_put_contents($temp, $content);
 	$file = fopen($temp,'r'); 
 	return  $file;
 }
 
-function setRequestUrlAndFile($url, $ttlFile){
+function setRequestUrlAndFile($url, $file, $mimeType = 'text/turtle'){
 	global $ch;
+	curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: ' . $mimeType)); 
 	curl_setopt($ch, CURLOPT_URL, $url);
-	curl_setopt($ch, CURLOPT_INFILE, $ttlFile);  
+	curl_setopt($ch, CURLOPT_INFILE, $file);  
 }
 
 function sendRequest(){
@@ -131,5 +202,20 @@ function sendRequest(){
 	return curl_getinfo($ch, CURLINFO_HTTP_CODE);
 }
 
+
+//Clean up all created data
+function prune() {
+	global $serverUrl, $rootUrl;
+	$url = $serverUrl . $rootUrl;
+	$url_tuombstone = $url . '/fcr:tombstone';
+	if(testUrlExistence($url) == 200){
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
+		curl_setopt($ch, CURLOPT_URL, $url);
+		curl_exec($ch);
+		curl_setopt($ch, CURLOPT_URL, $url_tuombstone);
+		curl_exec($ch);
+	}
+}
 
 ?>
