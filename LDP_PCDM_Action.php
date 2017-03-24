@@ -136,8 +136,9 @@ function insertIntoRepo($row) {
 	}
 
 	//Create SecondLayerDirectContainer
+	$url = $url . $suburl;
 	$ldpUrl = $url;
-	$url .= $suburl . $secondPrefix; //e.g.  /records/100/images/image1/files
+	$url .= $secondPrefix; //e.g.  /records/100/images/image1/files
 	createDirectContainer($url, $ldpUrl, 'direct_file');
 
 	//Upload the actual file 
@@ -198,7 +199,7 @@ function prepareRdfObject($type, $url = null) {
 	    case 'direct_file':
 	        $content = $pcdm->ldpDirectFiles($url);
 	        break;    
-	}
+	} 
 	file_put_contents($temp, $content);
 	$file = fopen($temp,'r'); 
 	return  $file;
