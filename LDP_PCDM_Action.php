@@ -20,6 +20,9 @@ $hasSkippedFirstRow = false;
 //Curl object for creating models
 $ch = getMainCurlInstance();
 
+//Curl object for update file
+$chUpdate = getUpdateCurlInstance();
+
 //Pcdm object generator 
 $pcdm = new pcdm_generator();
 
@@ -65,9 +68,9 @@ function createBasicContainer($url) {
 	}
 }
 
-function createDirectContainer($url, $type){
+function createDirectContainer($url, $ldpUrl, $type){
 	if(testUrlExistence($url) != 200) {
-		$ttlFile = prepareRdfObject($type, $url); 
+		$ttlFile = prepareRdfObject($type, $ldpUrl); 
 		setRequestUrlAndFile($url, $ttlFile);
 		$responseHttpcode = sendRequest();
 		if($responseHttpcode == 201){
@@ -113,8 +116,9 @@ function insertIntoRepo($row) {
 	createBasicContainer($url);
 
 	//Create SecondLayerDirectorContainer
+	$ldpUrl = $url;
 	$url .= $firstPrefix;  //e.g.  /records/100/images 
-	createDirectContainer($url, 'direct');
+	createDirectContainer($url, $ldpUrl, 'direct');
 
 	//Create SecondLayerBasicContainer 
 	//e.g.  /records/100/images/image{{image_order}} or /records/100/images/image1*
@@ -132,12 +136,14 @@ function insertIntoRepo($row) {
 	}
 
 	//Create SecondLayerDirectContainer
+	$ldpUrl = $url;
 	$url .= $suburl . $secondPrefix; //e.g.  /records/100/images/image1/files
-	createDirectContainer($url, 'direct_file');
+	createDirectContainer($url, $ldpUrl, 'direct_file');
 
 	//Upload the actual file 
 	$url .= '/' . $fileName; //e.g.  /records/100/images/image1/files/9210288-21398102-3112.jpg
 	createFile($url, $fileName, $type);
+	updateFile($url);
 
 }
 
@@ -153,6 +159,15 @@ function getTestCurlInstance() {
 	$chTest = curl_init();
 	curl_setopt($chTest, CURLOPT_NOBODY  , 1); 
 	return $chTest;
+}
+
+function getUpdateCurlInstance() {
+	$chUpdate = curl_init();
+	curl_setopt($chUpdate, CURLOPT_PUT, 1);  
+	curl_setopt($chUpdate, CURLOPT_RETURNTRANSFER, 1);   
+	curl_setopt($chUpdate, CURLOPT_CUSTOMREQUEST, 'PATCH'); 
+	curl_setopt($chUpdate, CURLOPT_HTTPHEADER, array('Content-type: application/sparql-update')); 
+	return $chUpdate;
 }
 
 function testUrlExistence($url) {
@@ -181,12 +196,21 @@ function prepareRdfObject($type, $url = null) {
 	        $content = $pcdm->ldpDirect($url);
 	        break;
 	    case 'direct_file':
-	        $content = $pcdm->ldpDirectFile($url);
+	        $content = $pcdm->ldpDirectFiles($url);
 	        break;    
 	}
 	file_put_contents($temp, $content);
 	$file = fopen($temp,'r'); 
 	return  $file;
+}
+
+function prepareSparql() {
+	global $pcdm;
+	$temp = 'temp.ru';
+	$content = $pcdm->pcdmFile();
+	file_put_contents($temp, $content);
+	$file = fopen($temp, 'r');
+	return $file;
 }
 
 function setRequestUrlAndFile($url, $file, $mimeType = 'text/turtle'){
@@ -196,12 +220,21 @@ function setRequestUrlAndFile($url, $file, $mimeType = 'text/turtle'){
 	curl_setopt($ch, CURLOPT_INFILE, $file);  
 }
 
-function sendRequest(){
+function sendRequest($action = NULL){
 	global $ch;
 	curl_exec($ch);
 	return curl_getinfo($ch, CURLINFO_HTTP_CODE);
 }
 
+function updateFile($url) {
+	global $chUpdate;
+	$ruFile = prepareSparql(); 
+    $url .= '/fcr:metadata';  
+    curl_setopt($chUpdate, CURLOPT_URL, $url);
+	curl_setopt($chUpdate, CURLOPT_INFILE, $ruFile);  
+	curl_exec($chUpdate);
+	$responseHttpcode = curl_getinfo($chUpdate, CURLINFO_HTTP_CODE);
+}
 
 //Clean up all created data
 function prune() {

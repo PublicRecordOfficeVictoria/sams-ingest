@@ -21,7 +21,7 @@ class pcdm_generator {
    	   ";
    }
 
-      function ldpDirectFile($url) {
+   function ldpDirectFiles($url) {
    	   return "
 			@prefix ldp: <http://www.w3.org/ns/ldp#>
 			@prefix pcdm: <http://pcdm.org/models#>
@@ -30,6 +30,16 @@ class pcdm_generator {
   			ldp:membershipResource <" . $url ."> ;
   			ldp:hasMemberRelation pcdm:hasFile .
    	   ";
+   }
+
+   function pcdmFile() {
+   	   return "
+			PREFIX pcdm: <http://pcdm.org/models#>
+			INSERT {
+			  <> a pcdm:File
+			} WHERE {
+			}
+   		"; 
    }
 
 }
