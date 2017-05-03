@@ -16,5 +16,5 @@ prune)
     prune
     ;;
 *)
-    echo "Please either provide 'start', or 'prune' as argument for running the script." 	
+    echo "Please either provide 'start', or 'prune' as argument for running the script."
 esac

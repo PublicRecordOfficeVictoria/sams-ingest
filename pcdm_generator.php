@@ -5,7 +5,7 @@ class pcdm_generator {
    function pcdmObject() {
        return "
 			@prefix pcdm: <http://pcdm.org/models#>
-		 
+ 
 			<> a pcdm:Object .
 		";
    }
@@ -39,8 +39,19 @@ class pcdm_generator {
 			  <> a pcdm:File
 			} WHERE {
 			}
-   		"; 
+   		";
    }
+
+   function cidocDocument($AtCurl) {
+           return "
+                        PREFIX cidoc-crm: <http://www.cidoc-crm.org/cidoc-crm/#>
+                        INSERT {
+                          <> cidoc-crm:P70_documents <" .$AtCurl . "#>
+                        } WHERE {
+                        }
+                ";
+   }
+
 
 }
 

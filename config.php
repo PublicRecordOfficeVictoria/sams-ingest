@@ -1,17 +1,17 @@
 <?php
 
-//$csvFileName = 'Barcodes for initial import v0.2 DW 20170320.csv';
-$csvFileName = 'sample.csv';
+$csvFileName = '/home/danielw/testURLattachdata_DW_20170501.txt';
+//$csvFileName = 'sample.csv';
 $skipFirstRow = true;
 
-$pathToFiles = './files';
+$pathToFiles = '/home/danielw/URLtesting';
 
-$serverUrl = 'http://115.146.91.33:8984/rest';
+$serverUrl = 'http://localhost:8080/rest';
 
-$rootUrl = '/things';
+$rootUrl = '/records';
 
 $firstPrefix = '/images';
-$firstPrefixValue = '/image';
+$firstPrefixValue = '/';
 
 $secondPrefix = '/files';
 

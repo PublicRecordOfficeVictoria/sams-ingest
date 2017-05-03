@@ -37,7 +37,7 @@ while(! feof($csvFile)){
   	$hasSkippedFirstRow = true;
   	fgetcsv($csvFile, 1000);
   	continue;
-  }	
+  }
   insertIntoRepo(fgetcsv($csvFile));
 }
 
@@ -110,10 +110,17 @@ function insertIntoRepo($row) {
 	$barcode = $row[1];
 	$imageOrder = $row[2];
 	$type = $row[3];
+	$unit_item = $row[4];
 
 	//Create FirstlayerBasicContainer
 	$url = $serverUrl . $rootUrl . '/' . $barcode; //e.g.  /records/100
 	createBasicContainer($url);
+
+	//Link Container to ACM entity it 'documents'
+	$AtCurl = "http://access.prov.vic.gov.au/public/component/daPublicBaseContainer?component=daView" . ucfirst(strtolower($unit_item)) . "&entityId=" . $barcode;
+	$meta_flag = 1;
+	updateFile($url, $AtCurl, $meta_flag);
+	$meta_flag = 0;
 
 	//Create SecondLayerDirectorContainer
 	$ldpUrl = $url;
@@ -144,7 +151,7 @@ function insertIntoRepo($row) {
 	//Upload the actual file 
 	$url .= '/' . $fileName; //e.g.  /records/100/images/image1/files/9210288-21398102-3112.jpg
 	createFile($url, $fileName, $type);
-	updateFile($url);
+	updateFile($url, $AtCurl, $meta_flag);
 
 }
 
@@ -182,7 +189,7 @@ function testUrlExistence($url) {
 function prepareFile($name){
 	global $pathToFiles;
 	$pathToFile = $pathToFiles . '/' . $name;
-	$file = fopen($pathToFile,'r'); 
+	$file = fopen($pathToFile,'r');
 	return  $file;
 }
 
@@ -198,17 +205,21 @@ function prepareRdfObject($type, $url = null) {
 	        break;
 	    case 'direct_file':
 	        $content = $pcdm->ldpDirectFiles($url);
-	        break;    
-	} 
+	        break;
+	}
 	file_put_contents($temp, $content);
-	$file = fopen($temp,'r'); 
+	$file = fopen($temp,'r');
 	return  $file;
 }
 
-function prepareSparql() {
+function prepareSparql($meta_flag, $AtCurl) {
 	global $pcdm;
 	$temp = 'temp.ru';
-	$content = $pcdm->pcdmFile();
+	if($meta_flag == 1) {
+	    $content = $pcdm->cidocDocument($AtCurl);
+	} else {
+	    $content = $pcdm->pcdmFile();
+	}
 	file_put_contents($temp, $content);
 	$file = fopen($temp, 'r');
 	return $file;
@@ -216,9 +227,9 @@ function prepareSparql() {
 
 function setRequestUrlAndFile($url, $file, $mimeType = 'text/turtle'){
 	global $ch;
-	curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: ' . $mimeType)); 
+	curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-type: ' . $mimeType));
 	curl_setopt($ch, CURLOPT_URL, $url);
-	curl_setopt($ch, CURLOPT_INFILE, $file);  
+	curl_setopt($ch, CURLOPT_INFILE, $file);
 }
 
 function sendRequest($action = NULL){
@@ -227,11 +238,13 @@ function sendRequest($action = NULL){
 	return curl_getinfo($ch, CURLINFO_HTTP_CODE);
 }
 
-function updateFile($url) {
+function updateFile($url, $AtCurl, $meta_flag) {
 	global $chUpdate;
-	$ruFile = prepareSparql(); 
-    $url .= '/fcr:metadata';  
-    curl_setopt($chUpdate, CURLOPT_URL, $url);
+	$ruFile = prepareSparql($meta_flag, $AtCurl); 
+	if($meta_flag == 0) {
+	    $url .= '/fcr:metadata';
+	} 
+	curl_setopt($chUpdate, CURLOPT_URL, $url);
 	curl_setopt($chUpdate, CURLOPT_INFILE, $ruFile);  
 	curl_exec($chUpdate);
 	$responseHttpcode = curl_getinfo($chUpdate, CURLINFO_HTTP_CODE);

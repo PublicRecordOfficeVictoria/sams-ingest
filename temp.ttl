@@ -3,6 +3,6 @@
 			@prefix pcdm: <http://pcdm.org/models#>
  
 			<> a ldp:DirectContainer, pcdm:Object ;
-  			ldp:membershipResource <http://115.146.91.33:8984/rest/things/5933768/pages/cover1> ;
+  			ldp:membershipResource <http://localhost:8080/rest/records//images/1> ;
   			ldp:hasMemberRelation pcdm:hasFile .
    	   
