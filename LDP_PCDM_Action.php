@@ -113,7 +113,11 @@ function insertIntoRepo($row) {
 	$unit_item = $row[4];
 
 	//Create FirstlayerBasicContainer
-	$url = $serverUrl . $rootUrl . '/' . $barcode; //e.g.  /records/100
+
+	//split barcode into 4-digit blocks to act as pseudo pair-tree
+	$pt_barcode = substr(chunk_split($barcode, 4,"/"),0,-1);
+
+	$url = $serverUrl . $rootUrl . '/' . $pt_barcode; //e.g.  /records/100
 	createBasicContainer($url);
 
 	//Link Container to ACM entity it 'documents'
@@ -122,13 +126,14 @@ function insertIntoRepo($row) {
 	updateFile($url, $AtCurl, $meta_flag);
 	$meta_flag = 0;
 
-	//Create SecondLayerDirectorContainer
+	//Create SecondLayerDirectContainer
 	$ldpUrl = $url;
 	$url .= $firstPrefix;  //e.g.  /records/100/images 
 	createDirectContainer($url, $ldpUrl, 'direct');
 
 	//Create SecondLayerBasicContainer 
 	//e.g.  /records/100/images/image{{image_order}} or /records/100/images/image1*
+
 	if($imageOrder != ''){
 		$suburl = $firstPrefixValue . $imageOrder;  
 		createBasicContainer($url . $suburl);
