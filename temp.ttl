@@ -3,6 +3,6 @@
 			@prefix pcdm: <http://pcdm.org/models#>
  
 			<> a ldp:DirectContainer, pcdm:Object ;
-  			ldp:membershipResource <http://localhost:8080/rest/records//images/1> ;
+  			ldp:membershipResource <https://dev-content.prov.vic.gov.au/rest/records/3002/9836/17/images/1> ;
   			ldp:hasMemberRelation pcdm:hasFile .
    	   

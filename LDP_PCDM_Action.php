@@ -6,6 +6,7 @@ include 'pcdm_generator.php';
 //Curl object for testing url existences
 $chTest = getTestCurlInstance();
 
+/*  disable pruning option
 if(isset($argv[1])) {
 	if($argv[1] == 'prune') {
 		prune();
@@ -13,6 +14,7 @@ if(isset($argv[1])) {
 		return;
 	}
 }
+*/
 
 $csvFile = fopen($csvFileName, 'r');
 $hasSkippedFirstRow = false;
@@ -29,6 +31,9 @@ $pcdm = new pcdm_generator();
 //Create root container
 createBasicContainer($serverUrl . $rootUrl);
 
+//Initialise log counter
+$counter = 0;
+
 //LOOP FROM ROW TO ROW 
 while(! feof($csvFile)){
 
@@ -38,6 +43,9 @@ while(! feof($csvFile)){
   	fgetcsv($csvFile, 1000);
   	continue;
   }
+  // insert a counter into the log
+  $counter++;
+  echo PHP_EOL . $counter . PHP_EOL;
   insertIntoRepo(fgetcsv($csvFile));
 }
 
@@ -56,14 +64,14 @@ function createBasicContainer($url) {
 		setRequestUrlAndFile($url, $ttlFile);
 		$responseHttpcode = sendRequest();
 		if($responseHttpcode == 201){
-			echo $url . ' is successfully created' . "\n";
+			echo $url . ' is successfully created' . PHP_EOL;
 			return 1;
 		}else{
-			echo $url . ' is failed to create' . "\n";
+			echo $url . ' is failed to create' . PHP_EOL;
 			return 0;
 		}
 	} else {
-		//echo $name . ' basic container is already exist' . "\n";
+		// echo $url . ' basic container already exists' . PHP_EOL;
 		return -1;
 	}
 }
@@ -74,14 +82,14 @@ function createDirectContainer($url, $ldpUrl, $type){
 		setRequestUrlAndFile($url, $ttlFile);
 		$responseHttpcode = sendRequest();
 		if($responseHttpcode == 201){
-			echo $url . ' is successfully created' . "\n";
+			echo $url . ' successfully created' . PHP_EOL;
 			return 1;
 		}else{
-			echo $url . ' is failed to create' . "\n";
+			echo $url . ' creation failed' . PHP_EOL;
 			return 0;
 		}
 	} else {
-		//echo $name . ' direct container is already exist' . "\n";
+		// echo $url . ' direct container already exists' . PHP_EOL;
 		return -1;
 	}
 }
@@ -92,38 +100,47 @@ function createFile($url, $name, $mimeType) {
 		setRequestUrlAndFile($url, $file, $mimeType);
 		$responseHttpcode = sendRequest();
 		if($responseHttpcode == 201){
-			echo $url . ' is successfully created' . "\n";
+			echo $url . ' is successfully created at ' . date('Y-m-d H:i:s') . ' (upload PC timestamp)'. PHP_EOL;
 			return 1;
 		}else{
-			echo $url . ' is failed to create' . "\n";
+			echo $url . ' was not created at ' . date('Y-m-d H:i:s') . ' (upload PC timestamP).'. PHP_EOL . 'HTTP response code: ' . $responseHttpcode . PHP_EOL;
 			return 0;
 		}
 	} else {
-		//echo $name . ' file is already exist' . "\n";
+		echo $name . ' file already exists' . PHP_EOL;
 		return -1;
 	}
 }
 
 function insertIntoRepo($row) { 
-	global $serverUrl, $rootUrl, $firstPrefix, $firstPrefixValue, $secondPrefix;
+	global $serverUrl, $rootUrl, $firstPrefix, $firstPrefixValue, $secondPrefix, $pathToFiles;
+  if ($row != NULL) {
 	$fileName = $row[0];
 	$barcode = $row[1];
 	$imageOrder = $row[2];
 	$type = $row[3];
 	$unit_item = $row[4];
+	$full_partial = $row[5];
+	
+	// Create Basic container representing the record using pair tree from PID/barcode
+    //  each level of the pair tree structure is a basic container
+	$url = $serverUrl . $rootUrl;
+	$pt_barcode = str_split($barcode, 4);
+	foreach ($pt_barcode as $fragment) {
+		$url = $url . '/' . $fragment;
+		createBasicContainer($url);
+	}
 
-	//Create FirstlayerBasicContainer
-
-	//split barcode into 4-digit blocks to act as pseudo pair-tree
-	$pt_barcode = substr(chunk_split($barcode, 4,"/"),0,-1);
-
-	$url = $serverUrl . $rootUrl . '/' . $pt_barcode; //e.g.  /records/100
-	createBasicContainer($url);
-
-	//Link Container to ACM entity it 'documents'
-	$AtCurl = "http://access.prov.vic.gov.au/public/component/daPublicBaseContainer?component=daView" . ucfirst(strtolower($unit_item)) . "&entityId=" . $barcode;
+	//Link container to the ACM entity it 'documents'
+	$Object_text = "http://access.prov.vic.gov.au/public/component/daPublicBaseContainer?component=daView" . ucfirst(strtolower($unit_item)) . "&entityId=" . $barcode;
 	$meta_flag = 1;
-	updateFile($url, $AtCurl, $meta_flag);
+	updateFile($url, $Object_text, $meta_flag);
+
+	// Add a property indicating whether the images are a full or partial digitisation of the original
+	$Object_text = ucfirst(strtolower($full_partial)) . " copy";
+	$meta_flag = 2;
+	updateFile($url, $Object_text, $meta_flag);
+	
 	$meta_flag = 0;
 
 	//Create SecondLayerDirectContainer
@@ -153,11 +170,27 @@ function insertIntoRepo($row) {
 	$url .= $secondPrefix; //e.g.  /records/100/images/image1/files
 	createDirectContainer($url, $ldpUrl, 'direct_file');
 
+	// get the height and width of the image/file about to be uploaded
+	$pathToFile = $pathToFiles . '/' . $fileName;
+	unset($dimensions);
+	exec('magick identify -ping -format "%w %h" ' . $pathToFile,$dimensions);
+    if (isset($dimensions)) {
+		$Object_text = $dimensions[0];
+	} else {
+		echo PHP_EOL . 'Can\'t find that filename in the location you have specified.  Check that the CSV file and config file are correct!';
+	}
+	
 	//Upload the actual file 
 	$url .= '/' . $fileName; //e.g.  /records/100/images/image1/files/9210288-21398102-3112.jpg
 	createFile($url, $fileName, $type);
-	updateFile($url, $AtCurl, $meta_flag);
+	updateFile($url, $Object_text, $meta_flag);
 
+	//and update the created resource with the height and width properties
+	// SUFFIX MAY ALREADY HAVE BEEN ADDED TO $url IN THE PREPARE SPARQL FUNCTION
+	$url .= '/fcr:metadata';
+	$meta_flag = 3;
+	updateFile($url, $Object_text, $meta_flag);
+  }
 }
 
 function getMainCurlInstance() {
@@ -188,6 +221,10 @@ function testUrlExistence($url) {
 	curl_setopt($chTest, CURLOPT_URL, $url);
 	curl_exec($chTest);
 	$httpcode = curl_getinfo($chTest, CURLINFO_HTTP_CODE);
+	$curl_error_message = curl_error($chTest);
+	if ($httpcode == 0){
+		echo PHP_EOL . "Error message is: " . $curl_error_message . PHP_EOL;
+	}
 	return $httpcode;
 }
 
@@ -217,14 +254,28 @@ function prepareRdfObject($type, $url = null) {
 	return  $file;
 }
 
-function prepareSparql($meta_flag, $AtCurl) {
+function prepareSparql($meta_flag, $Object_text) {
 	global $pcdm;
 	$temp = 'temp.ru';
-	if($meta_flag == 1) {
-	    $content = $pcdm->cidocDocument($AtCurl);
-	} else {
-	    $content = $pcdm->pcdmFile();
+
+	switch ($meta_flag) {
+	    case 0:
+	        $content = $pcdm->pcdmFile();
+	        break;
+	    case 1:
+	        $content = $pcdm->cidocDocument($Object_text);
+	        break;
+	    case 2:
+	        $content = $pcdm->cidocNote($Object_text);
+	        break;
+		case 3:
+		    $wh = explode(' ',$Object_text);
+            $width = $wh[0];
+            $height= $wh[1];
+		    $content = $pcdm->exifWidthHeight($width,$height);
+			break;
 	}
+
 	file_put_contents($temp, $content);
 	$file = fopen($temp, 'r');
 	return $file;
@@ -243,18 +294,20 @@ function sendRequest($action = NULL){
 	return curl_getinfo($ch, CURLINFO_HTTP_CODE);
 }
 
-function updateFile($url, $AtCurl, $meta_flag) {
+function updateFile($url, $Object_text, $meta_flag) {
 	global $chUpdate;
-	$ruFile = prepareSparql($meta_flag, $AtCurl); 
+	$ruFile = prepareSparql($meta_flag, $Object_text);
 	if($meta_flag == 0) {
 	    $url .= '/fcr:metadata';
-	} 
+	}
 	curl_setopt($chUpdate, CURLOPT_URL, $url);
-	curl_setopt($chUpdate, CURLOPT_INFILE, $ruFile);  
+	curl_setopt($chUpdate, CURLOPT_INFILE, $ruFile);
 	curl_exec($chUpdate);
 	$responseHttpcode = curl_getinfo($chUpdate, CURLINFO_HTTP_CODE);
+	echo PHP_EOL . "updateFile HTTP response code is: " . $responseHttpcode . PHP_EOL;
 }
 
+/* Disable pruning option
 //Clean up all created data
 function prune() {
 	global $serverUrl, $rootUrl;
@@ -269,5 +322,6 @@ function prune() {
 		curl_exec($ch);
 	}
 }
+*/
 
 ?>
