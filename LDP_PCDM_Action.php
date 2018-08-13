@@ -6,16 +6,6 @@ include 'pcdm_generator.php';
 //Curl object for testing url existences
 $chTest = getTestCurlInstance();
 
-/*  disable pruning option
-if(isset($argv[1])) {
-	if($argv[1] == 'prune') {
-		prune();
-		echo 'All data is deleted' . "\n";
-		return;
-	}
-}
-*/
-
 $csvFile = fopen($csvFileName, 'r');
 $hasSkippedFirstRow = false;
 
@@ -306,22 +296,5 @@ function updateFile($url, $Object_text, $meta_flag) {
 	$responseHttpcode = curl_getinfo($chUpdate, CURLINFO_HTTP_CODE);
 	echo PHP_EOL . "updateFile HTTP response code is: " . $responseHttpcode . PHP_EOL;
 }
-
-/* Disable pruning option
-//Clean up all created data
-function prune() {
-	global $serverUrl, $rootUrl;
-	$url = $serverUrl . $rootUrl;
-	$url_tuombstone = $url . '/fcr:tombstone';
-	if(testUrlExistence($url) == 200){
-		$ch = curl_init();
-		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'DELETE');
-		curl_setopt($ch, CURLOPT_URL, $url);
-		curl_exec($ch);
-		curl_setopt($ch, CURLOPT_URL, $url_tuombstone);
-		curl_exec($ch);
-	}
-}
-*/
 
 ?>
